@@ -1,0 +1,104 @@
+const uint8_t spRIGHT[] PROGMEM = {0x66,0xD7,0xB1,0x24,0xDC,0xE3,0x98,0xCD,0x95,0xA4,0x28,0xB5,0x97,0xD6,0xD0,0x8C,0x3A,0x55,0xFE,0x18,0x43,0xB1,0x4C,0x37,0x6F,0xA7,0x2D,0x72,0x22,0x8A,0xF3,0x9E,0xA6,0xFA,0x94,0x0A,0xDD,0x7C,0x9B,0xDB,0xAD,0xB1,0xD7,0x40,0xF3,0x78,0x3D,0xE7,0x7E,0xE6,0x07,0x81,0x22,0x94,0xBB,0x88,0x6C,0x00,0x50,0xC0,0xB6,0xD7,0x1E,0x10,0x40,0x9B,0xEB,0x0C,0x28,0x56,0xE9,0xFF,0x01};
+const uint8_t spLEFT[] PROGMEM = {0x69,0x1D,0xC0,0xDA,0xCC,0xD3,0xA6,0xB5,0x81,0x68,0xD1,0xF4,0xDA,0xC7,0xD3,0x57,0x6F,0x11,0xDC,0x4B,0x6E,0x73,0x9A,0xE6,0x5D,0x5B,0x72,0xF5,0xED,0xF7,0xD2,0xCE,0x92,0x2C,0x5C,0xEA,0x0D,0x03,0x8A,0x0E,0x25,0xC0,0x74,0xE3,0x12,0xD0,0x80,0x04,0x10,0x90,0x89,0x2B,0x08,0x60,0x8B,0x71,0x0B,0x10,0xA0,0xB5,0xF3,0xFF,0x07};
+#include <Adafruit_CircuitPlayground.h>
+
+#define BUTTON_LEFT_PIN  1 
+#define BUTTON_RIGHT_PIN 2 
+
+#define REACTION_TIME 1000
+#define COOLDOWN_TIME 1500
+
+volatile uint8_t lastMove = 0;
+volatile bool leftButtonPressed = false;
+volatile bool rightButtonPressed = false;
+volatile bool moveProcessed = false;
+volatile bool moveAnnounced = false;
+
+unsigned long moveTime = 0;
+unsigned long cooldownTime = 0;
+unsigned int toneFrequency = 440;
+
+void setup() {
+  CircuitPlayground.begin();
+  pinMode(BUTTON_LEFT_PIN, INPUT);
+  pinMode(BUTTON_RIGHT_PIN, INPUT);
+  attachInterrupt(digitalPinToInterrupt(BUTTON_LEFT_PIN), leftButton, FALLING);
+  attachInterrupt(digitalPinToInterrupt(BUTTON_RIGHT_PIN), rightButton, FALLING);
+}
+
+void loop() {
+  if (CircuitPlayground.slideSwitch()) {
+    if (!moveAnnounced && (millis() - cooldownTime) >= COOLDOWN_TIME) {
+      lastMove = random(1, 3);  
+      moveTime = millis();
+      moveProcessed = false;
+      moveAnnounced = true;
+
+      switch (lastMove) {
+        case 1:
+          CircuitPlayground.speaker.say(spLEFT);
+          break;
+        case 2:
+          CircuitPlayground.speaker.say(spRIGHT);
+          break;
+      }
+    } else if (moveAnnounced && (millis() - moveTime) >= REACTION_TIME) {
+      moveAnnounced = false;
+      if (!moveProcessed) {
+        checkAndProcessMove();
+      }
+    }
+  } else {
+    lastMove = 0;
+  }
+}
+
+void checkAndProcessMove() {
+  bool correctMove = false;
+  switch (lastMove) {
+    case 1: // Left
+      if (leftButtonPressed) {
+        correctMove = true;
+        leftButtonPressed = false;
+      }
+      break;
+
+    case 2: // Right
+      if (rightButtonPressed) {
+        correctMove = true;
+        rightButtonPressed = false; 
+      }
+      break;
+  }
+
+  if (correctMove) {
+    moveProcessed = true;
+    for (int i = 0; i < 10; i++) {
+      CircuitPlayground.setPixelColor(i, 0, 255, 0);
+    }
+    toneFrequency += 100;
+    CircuitPlayground.playTone(toneFrequency, 200);
+    delay(500);
+    CircuitPlayground.clearPixels();
+    lastMove = 0;
+    cooldownTime = millis();
+  } else {
+    for (int i = 0; i < 10; i++) {
+      CircuitPlayground.setPixelColor(i, 255, 0, 0);  
+    }
+    toneFrequency = 440;
+    CircuitPlayground.playTone(toneFrequency, 200);
+    delay(500);
+    CircuitPlayground.clearPixels();
+    lastMove = 0;
+    cooldownTime = millis();
+  }
+}
+
+void leftButton() {
+  leftButtonPressed = true;
+}
+
+void rightButton() {
+  rightButtonPressed = true;
+}
