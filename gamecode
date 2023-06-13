@@ -14,7 +14,7 @@ enum Move {
 volatile Move lastButtonPressed = NONE; //no button pressed starting the game 
 
 // Time delays and tone frequency
-int delay = 1500;  // Delay between each game round
+int Announcedelay = 1500;  // Delay between each game round
 int Reaction = 150; // Reaction time allowed 
 int toneFrequency = 300; // Start tone frequency
 
@@ -68,7 +68,7 @@ void loop() {
   lastButtonPressed = NONE; //Reset button press, as it will read good if not reset 
 
   // Time in between move announcements 
-  delay(delay);
+  delay(Announcedelay);
 }
 
 
