@@ -2,103 +2,94 @@ const uint8_t spRIGHT[] PROGMEM = {0x66,0xD7,0xB1,0x24,0xDC,0xE3,0x98,0xCD,0x95,
 const uint8_t spLEFT[] PROGMEM = {0x69,0x1D,0xC0,0xDA,0xCC,0xD3,0xA6,0xB5,0x81,0x68,0xD1,0xF4,0xDA,0xC7,0xD3,0x57,0x6F,0x11,0xDC,0x4B,0x6E,0x73,0x9A,0xE6,0x5D,0x5B,0x72,0xF5,0xED,0xF7,0xD2,0xCE,0x92,0x2C,0x5C,0xEA,0x0D,0x03,0x8A,0x0E,0x25,0xC0,0x74,0xE3,0x12,0xD0,0x80,0x04,0x10,0x90,0x89,0x2B,0x08,0x60,0x8B,0x71,0x0B,0x10,0xA0,0xB5,0xF3,0xFF,0x07};
 #include <Adafruit_CircuitPlayground.h>
 
-#define BUTTON_LEFT_PIN  1 
-#define BUTTON_RIGHT_PIN 2 
+enum Direction {
+  NONE = 0, 
+  LEFT = 1,
+  RIGHT = 2
+};
 
-#define REACTION_TIME 1000
-#define COOLDOWN_TIME 1500
-
-volatile uint8_t lastMove = 0;
-volatile bool leftButtonPressed = false;
-volatile bool rightButtonPressed = false;
-volatile bool moveProcessed = false;
-volatile bool moveAnnounced = false;
-
-unsigned long moveTime = 0;
-unsigned long cooldownTime = 0;
-unsigned int toneFrequency = 440;
+volatile Direction lastButtonPressed = NONE; // volatile keyword for ISR
+int delayTime = 1500;
+int respondTime = 150;
+int toneFrequency = 440; // Start tone frequency
 
 void setup() {
   CircuitPlayground.begin();
-  pinMode(BUTTON_LEFT_PIN, INPUT);
-  pinMode(BUTTON_RIGHT_PIN, INPUT);
-  attachInterrupt(digitalPinToInterrupt(BUTTON_LEFT_PIN), leftButton, FALLING);
-  attachInterrupt(digitalPinToInterrupt(BUTTON_RIGHT_PIN), rightButton, FALLING);
+
+  // Attach the ISRs to the button pin interrupts
+  attachInterrupt(digitalPinToInterrupt(4), leftButtonISR, FALLING);
+  attachInterrupt(digitalPinToInterrupt(5), rightButtonISR, FALLING);
 }
 
 void loop() {
-  if (CircuitPlayground.slideSwitch()) {
-    if (!moveAnnounced && (millis() - cooldownTime) >= COOLDOWN_TIME) {
-      lastMove = random(1, 3);  
-      moveTime = millis();
-      moveProcessed = false;
-      moveAnnounced = true;
-
-      switch (lastMove) {
-        case 1:
-          CircuitPlayground.speaker.say(spLEFT);
-          break;
-        case 2:
-          CircuitPlayground.speaker.say(spRIGHT);
-          break;
-      }
-    } else if (moveAnnounced && (millis() - moveTime) >= REACTION_TIME) {
-      moveAnnounced = false;
-      if (!moveProcessed) {
-        checkAndProcessMove();
-      }
-    }
-  } else {
-    lastMove = 0;
+  if (!CircuitPlayground.slideSwitch()) {
+    delay(100); // Check every 100ms if the slide switch has changed.
+    return;
   }
-}
 
-void checkAndProcessMove() {
-  bool correctMove = false;
-  switch (lastMove) {
-    case 1: // Left
-      if (leftButtonPressed) {
-        correctMove = true;
-        leftButtonPressed = false;
+  // Generate a random number for Left or Right
+  Direction dir = static_cast<Direction>(random(1, 3));
+
+  // Announce Left or Right
+  switch (dir) {
+    case LEFT:
+      CircuitPlayground.speaker.say(spLEFT);
+      break;
+    case RIGHT:
+      CircuitPlayground.speaker.say(spRIGHT);
+      break;
+  }
+
+  delay(respondTime);
+
+  // Check if the button pressed matches the announcement
+  switch (dir) {
+    case LEFT:
+      if (lastButtonPressed == LEFT) {
+        correctAction();
+      } else {
+        incorrectAction();
       }
       break;
-
-    case 2: // Right
-      if (rightButtonPressed) {
-        correctMove = true;
-        rightButtonPressed = false; 
+    case RIGHT:
+      if (lastButtonPressed == RIGHT) {
+        correctAction();
+      } else {
+        incorrectAction();
       }
       break;
   }
 
-  if (correctMove) {
-    moveProcessed = true;
-    for (int i = 0; i < 10; i++) {
-      CircuitPlayground.setPixelColor(i, 0, 255, 0);
-    }
-    toneFrequency += 100;
-    CircuitPlayground.playTone(toneFrequency, 200);
-    delay(500);
-    CircuitPlayground.clearPixels();
-    lastMove = 0;
-    cooldownTime = millis();
-  } else {
-    for (int i = 0; i < 10; i++) {
-      CircuitPlayground.setPixelColor(i, 255, 0, 0);  
-    }
-    toneFrequency = 440;
-    CircuitPlayground.playTone(toneFrequency, 200);
-    delay(500);
-    CircuitPlayground.clearPixels();
-    lastMove = 0;
-    cooldownTime = millis();
+  // Reset the last button pressed
+  lastButtonPressed = NONE;
+
+  delay(delayTime);
+}
+
+void leftButtonISR() {
+  lastButtonPressed = LEFT;
+}
+
+void rightButtonISR() {
+  lastButtonPressed = RIGHT;
+}
+
+void correctAction() {
+  // Player clicked the correct button
+  CircuitPlayground.clearPixels();
+  for (int i = 0; i < 10; i++) {
+    CircuitPlayground.setPixelColor(i, 0, 255, 0);
   }
+  CircuitPlayground.playTone(toneFrequency, 100, false);
+  toneFrequency += 100; // Increment the tone
 }
 
-void leftButton() {
-  leftButtonPressed = true;
-}
-
-void rightButton() {
-  rightButtonPressed = true;
+void incorrectAction() {
+  // Player clicked the wrong button or didn't click in time
+  CircuitPlayground.clearPixels();
+  for (int i = 0; i < 10; i++) {
+    CircuitPlayground.setPixelColor(i, 255, 0, 0);
+  }
+  CircuitPlayground.playTone(220, 100, false); // Play a low tone
+  toneFrequency = 300; // Reset the tone
 }
