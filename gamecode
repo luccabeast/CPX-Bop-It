@@ -2,93 +2,100 @@ const uint8_t spRIGHT[] PROGMEM = {0x66,0xD7,0xB1,0x24,0xDC,0xE3,0x98,0xCD,0x95,
 const uint8_t spLEFT[] PROGMEM = {0x69,0x1D,0xC0,0xDA,0xCC,0xD3,0xA6,0xB5,0x81,0x68,0xD1,0xF4,0xDA,0xC7,0xD3,0x57,0x6F,0x11,0xDC,0x4B,0x6E,0x73,0x9A,0xE6,0x5D,0x5B,0x72,0xF5,0xED,0xF7,0xD2,0xCE,0x92,0x2C,0x5C,0xEA,0x0D,0x03,0x8A,0x0E,0x25,0xC0,0x74,0xE3,0x12,0xD0,0x80,0x04,0x10,0x90,0x89,0x2B,0x08,0x60,0x8B,0x71,0x0B,0x10,0xA0,0xB5,0xF3,0xFF,0x07};
 #include <Adafruit_CircuitPlayground.h>
 
-enum Direction {
-  NONE = 0, 
-  LEFT = 1,
-  RIGHT = 2
+
+// Enumeration representing possible moves
+enum Move {
+  NONE = 0,  // No move made
+  LEFT = 1,  // Left move made
+  RIGHT = 2  // Right move made
 };
 
-volatile Direction lastButtonPressed = NONE; // volatile keyword for ISR
-int delayTime = 1500;
-int respondTime = 150;
-int toneFrequency = 440; // Start tone frequency
+// volatile because it's used in an ISR
+volatile Move lastButtonPressed = NONE; //no button pressed starting the game 
+
+// Time delays and tone frequency
+int delay = 1500;  // Delay between each game round
+int Reaction = 150; // Reaction time allowed 
+int toneFrequency = 300; // Start tone frequency
 
 void setup() {
   CircuitPlayground.begin();
 
-  // Attach the ISRs to the button pin interrupts
+  // create interrupts for each move 
   attachInterrupt(digitalPinToInterrupt(4), leftButtonISR, FALLING);
   attachInterrupt(digitalPinToInterrupt(5), rightButtonISR, FALLING);
 }
 
 void loop() {
   if (!CircuitPlayground.slideSwitch()) {
-    delay(100); // Check every 100ms if the slide switch has changed.
-    return;
+    delay(100);
+    return; //if slideswitch is NOT on, then the gamne will end and vice versa 
   }
+  // random move will be played 
+  Move dir = (Move)random(1, 3);
 
-  // Generate a random number for Left or Right
-  Direction dir = static_cast<Direction>(random(1, 3));
 
-  // Announce Left or Right
+  // Announce the randomly selected move
   switch (dir) {
     case LEFT:
-      CircuitPlayground.speaker.say(spLEFT);
+      CircuitPlayground.speaker.say(spLEFT); // announce left
       break;
     case RIGHT:
-      CircuitPlayground.speaker.say(spRIGHT);
+      CircuitPlayground.speaker.say(spRIGHT); // announce Right
       break;
   }
 
-  delay(respondTime);
+  delay(Reaction); // Give the player time to respond
 
-  // Check if the button pressed matches the announcement
+  // Check if the button pressed matches the announced direction
   switch (dir) {
     case LEFT:
-      if (lastButtonPressed == LEFT) {
-        correctAction();
-      } else {
-        incorrectAction();
+      if (lastButtonPressed == LEFT) { // If correct button pressed
+        correctAction(); // play good move procedure 
+      } else { // If incorrect or no button pressed
+        incorrectAction(); // Bad move procedure 
       }
       break;
     case RIGHT:
-      if (lastButtonPressed == RIGHT) {
-        correctAction();
-      } else {
-        incorrectAction();
+      if (lastButtonPressed == RIGHT) { 
+        correctAction(); 
+      } else { 
+        incorrectAction(); 
       }
       break;
   }
 
-  // Reset the last button pressed
-  lastButtonPressed = NONE;
+  lastButtonPressed = NONE; //Reset button press, as it will read good if not reset 
 
-  delay(delayTime);
+  // Time in between move announcements 
+  delay(delay);
 }
+
 
 void leftButtonISR() {
-  lastButtonPressed = LEFT;
+  lastButtonPressed = LEFT; // Check left was pressed
 }
 
+// ISR for the right button
 void rightButtonISR() {
-  lastButtonPressed = RIGHT;
+  lastButtonPressed = RIGHT; // check right was pressed
 }
 
+// Procedure to run when the player presses the correct button
 void correctAction() {
-  // Player clicked the correct button
-  CircuitPlayground.clearPixels();
+  CircuitPlayground.clearPixels(); // Clear LEDS
   for (int i = 0; i < 10; i++) {
-    CircuitPlayground.setPixelColor(i, 0, 255, 0);
+    CircuitPlayground.setPixelColor(i, 0, 255, 0); // Set all LEDS to green
   }
-  CircuitPlayground.playTone(toneFrequency, 100, false);
-  toneFrequency += 100; // Increment the tone
+  CircuitPlayground.playTone(toneFrequency, 100, false); // Play the current tone
+  toneFrequency += 100; // Increment tone
 }
 
+// Run when the player presses the wrong button or doesn't press in time
 void incorrectAction() {
-  // Player clicked the wrong button or didn't click in time
-  CircuitPlayground.clearPixels();
+  CircuitPlayground.clearPixels(); // Clear any existing LED colors
   for (int i = 0; i < 10; i++) {
-    CircuitPlayground.setPixelColor(i, 255, 0, 0);
+    CircuitPlayground.setPixelColor(i, 255, 0, 0); // Set all LED to red
   }
   CircuitPlayground.playTone(220, 100, false); // Play a low tone
   toneFrequency = 300; // Reset the tone
